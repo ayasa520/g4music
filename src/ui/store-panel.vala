@@ -401,6 +401,7 @@ namespace G4 {
             return header;
         }
 
+        private const string STACK_TAG_SEP = "\x1f";
         private GenericSet<unowned MusicList> _overlayed_lists = new GenericSet<unowned MusicList> (direct_hash, direct_equal);
 
         private void create_stack_page (Artist? artist, Album? album = null) {
@@ -437,7 +438,16 @@ namespace G4 {
 
             if (stack.animate_transitions && stack.visible_child == _current_list)
                 _overlayed_lists.add (_current_list);
-            stack.add (mlist, album_mode ? album?.album_key : artist?.artist_name);
+            string stack_name;
+            if (album_mode && artist_mode) {
+                unowned var ar = (!)artist;
+                unowned var al = (!)album;
+                stack_name = ar.artist + STACK_TAG_SEP + al.album_key;
+            } else if (album_mode)
+                stack_name = album?.album_key ?? "";
+            else
+                stack_name = artist?.artist ?? "";
+            stack.add (mlist, stack_name);
         }
 
         private Stack? get_current_stack () {
@@ -468,11 +478,26 @@ namespace G4 {
             var stack = get_current_stack ();
             if (stack != null) {
                 ((!)stack).get_visible_names (paths);
+                var uri_paths = new GenericArray<string> (paths.length + 1);
+                if (stack == _artist_stack)
+                    uri_paths.add (PageName.ARTIST);
+                else if (stack == _album_stack)
+                    uri_paths.add (PageName.ALBUM);
+                else
+                    uri_paths.add (PageName.PLAYLIST);
+                for (var i = 0; i < paths.length; i++) {
+                    var tag = paths.data[i];
+                    var sep = tag.index_of_char (STACK_TAG_SEP[0]);
+                    if (sep >= 0 && i == paths.length - 1)
+                        uri_paths.add (tag.substring (sep + 1));
+                    else
+                        uri_paths.add (tag);
+                }
+                _app.settings.set_string ("library-uri", build_library_uri_from_sa (uri_paths.data));
             } else {
                 paths.add (stack_view.get_visible_child_name () ?? "");
+                _app.settings.set_string ("library-uri", build_library_uri_from_sa (paths.data));
             }
-            var uri = build_library_uri_from_sa (paths.data);
-            _app.settings.set_string ("library-uri", uri);
             _album_key_of_list = _current_list.music_node?.album_key;
         }
 
@@ -506,7 +531,14 @@ namespace G4 {
                     } else if (pl != null) {
                         album = _library.get_playlist ((!)pl);
                     }
-                    if (album != null && stack.get_child_by_name (((!)album).album_key) == null) {
+                    string album_page_name = "";
+                    if (album != null) {
+                        if (artist != null)
+                            album_page_name = ((!)artist).artist + STACK_TAG_SEP + ((!)album).album_key;
+                        else
+                            album_page_name = ((!)album).album_key;
+                    }
+                    if (album != null && album_page_name.length > 0 && stack.get_child_by_name (album_page_name) == null) {
                         if ((stack.visible_child as MusicList)?.playable ?? false)
                             stack.pop ();
                         create_stack_page (artist, album);
@@ -619,6 +651,12 @@ namespace G4 {
             on_search_text_changed ();
         }
 
+        private static bool artists_match (Music music, string text) {
+            foreach (unowned var ar in music.artists)
+                if (text.match_string (ar, true)) return true;
+            return false;
+        }
+
         private bool on_search_match (Object obj) {
             unowned var music = (Music) obj;
             unowned var text = _search_text;
@@ -626,15 +664,13 @@ namespace G4 {
                 case SearchMode.ALBUM:
                     return text.match_string (music.album, true);
                 case SearchMode.ARTIST:
-                    return text.match_string (music.artist, true)
-                        || text.match_string (music.album_artist, true)
-                        || ((music as Artist)?.find_by_partial_artist (text) != null);
+                    return artists_match (music, text);
                 case SearchMode.TITLE:
                     return text.match_string (music.title, true);
                 default:
                     return text.match_string (music.album, true)
                         || text.match_string (music.album_artist, true)
-                        || text.match_string (music.artist, true)
+                        || artists_match (music, text)
                         || text.match_string (music.title, true);
             }
         }

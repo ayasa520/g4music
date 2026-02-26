@@ -164,7 +164,7 @@ namespace G4 {
                 return;
 
             music_album.label = music?.album ?? "";
-            music_artist.label = music?.artist ?? "";
+            music_artist.label = music?.artist_display ?? "";
             music_title.label = music?.title ?? "";
 
             var empty = _app.current_music == null && _app.current_list.get_n_items () == 0;

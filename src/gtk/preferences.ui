@@ -104,6 +104,20 @@
                 </child>
               </object>
             </child>
+            <child>
+              <object class="AdwActionRow">
+                <property name="icon-name">accessories-text-editor-symbolic</property>
+                <property name="title" translatable="yes">Artist separator characters</property>
+                <property name="subtitle" translatable="yes">Split multi-artist tags (e.g. &amp;amp;;/, )</property>
+                <child>
+                  <object class="GtkEntry" id="artist_split_entry">
+                    <property name="margin-top">4</property>
+                    <property name="margin-bottom">4</property>
+                    <property name="max-length">10</property>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
         </child>
         <child>

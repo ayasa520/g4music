@@ -35,6 +35,8 @@ namespace G4 {
         unowned Adw.ExpanderRow peak_row;
         [GtkChild]
         unowned Gtk.Entry peak_entry;
+        [GtkChild]
+        unowned Gtk.Entry artist_split_entry;
 
         private GenericArray<Gst.ElementFactory> _audio_sinks = new GenericArray<Gst.ElementFactory> (8);
 
@@ -70,6 +72,7 @@ namespace G4 {
 
             settings.bind ("show-peak", peak_row, "enable_expansion", SettingsBindFlags.DEFAULT);
             settings.bind ("peak-characters", peak_entry, "text", SettingsBindFlags.DEFAULT);
+            settings.bind ("artist-split-chars", artist_split_entry, "text", SettingsBindFlags.DEFAULT);
 
             GstPlayer.get_audio_sinks (_audio_sinks);
             var sink_names = new string[_audio_sinks.length];

@@ -146,11 +146,24 @@ namespace G4 {
             _current_duration = 0;
             _metadata.remove_all ();
             if (music != null) {
+                var m = (!) music;
                 var artists = new VariantBuilder (new VariantType ("as"));
-                artists.add ("s", music?.artist ?? "");
+                var artist_list = m.artists;
+                if (artist_list.length > 0) {
+                    foreach (unowned var ar in artist_list) {
+                        artists.add ("s", ar);
+                    }
+                } else {
+                    artists.add ("s", m.artist);
+                }
                 _metadata.insert ("xesam:artist", artists.end());
-                _metadata.insert ("xesam:title", new Variant.string (music?.title ?? ""));
-                _metadata.insert ("xesam:album", new Variant.string (music?.album ?? ""));
+                if (m.album_artist.length > 0) {
+                    var album_artists = new VariantBuilder (new VariantType ("as"));
+                    album_artists.add ("s", m.album_artist);
+                    _metadata.insert ("xesam:albumArtist", album_artists.end());
+                }
+                _metadata.insert ("xesam:title", new Variant.string (m.title));
+                _metadata.insert ("xesam:album", new Variant.string (m.album));
                 _metadata.insert ("mpris:length", new Variant.int64 (_current_duration));
             }
         }

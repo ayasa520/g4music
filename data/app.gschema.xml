@@ -23,6 +23,10 @@
       <default>false</default>
       <summary>Monitor local file changes</summary>
     </key>
+    <key name="artist-split-chars" type="s">
+      <default>'&amp;;/'</default>
+      <summary>Artist separator characters</summary>
+    </key>
     <key name="music-dir" type="s">
       <default>''</default>
       <summary>Load music from folder</summary>

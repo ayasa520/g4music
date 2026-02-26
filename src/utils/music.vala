@@ -2,6 +2,8 @@ namespace G4 {
     public const string UNKNOWN_ALBUM = _("Unknown Album");
     public const string UNKNOWN_ARTIST = _("Unknown Artist");
 
+    public string artist_split_chars;
+
     public class Music : Object {
         public string album = "";
         public string artist = "";
@@ -24,6 +26,7 @@ namespace G4 {
         protected string _title_key = "";
         private string? _cover_key = null;
         protected int _order = 0;
+        private string[] _artists = {};
 
         public Music (string uri, string title, int64 time) {
             this.title = title;
@@ -46,9 +49,22 @@ namespace G4 {
             }
         }
 
-        public unowned string artist_name {
-            get {
-                return album_artist.length > 0 ? album_artist : artist;
+        public string artist_display {
+            owned get { return artist; }
+        }
+
+        public string[] artists {
+            owned get {
+                if (_artists.length > 0)
+                    return _artists;
+                return new string[] { artist };
+            }
+        }
+
+        public string artist_name {
+            owned get {
+                if (album_artist.length > 0) return album_artist;
+                return _artists.length > 0 ? _artists[0] : artist;
             }
         }
 
@@ -84,17 +100,34 @@ namespace G4 {
 
         public bool from_gst_tags (Gst.TagList tags) {
             var changed = false;
-            unowned string? al = null, ar = null, ti = null, aa = null, ge = null;
+            unowned string? al = null, ti = null, aa = null, ge = null;
             if (tags.peek_string_index (Gst.Tags.ALBUM, 0, out al)
                     && al != null && strcmp (album, al) != 0) {
                 album = (!)al;
                 changed = true;
             }
-            if (tags.peek_string_index (Gst.Tags.ARTIST, 0, out ar)
-                    && ar != null && strcmp (artist, ar) != 0) {
-                artist = (!)ar;
-                _artist_key = artist.collate_key_for_filename ();
-                changed = true;
+            // Collect all ARTIST tag values, split by separator chars, deduplicate
+            var artist_count = tags.get_tag_size (Gst.Tags.ARTIST);
+            if (artist_count > 0) {
+                var seen = new HashTable<string, bool> (str_hash, str_equal);
+                var parts = new GenericArray<string> (artist_count * 2);
+                for (var i = 0; i < artist_count; i++) {
+                    unowned string? ar = null;
+                    if (tags.peek_string_index (Gst.Tags.ARTIST, i, out ar) && ar != null)
+                        split_and_collect ((!)ar, artist_split_chars, seen, parts);
+                }
+                if (parts.length > 0) {
+                    var new_display = string.joinv (", ", parts.data);
+                    if (artist != new_display || _artists.length != parts.length) {
+                        var new_artists = new string[parts.length];
+                        for (var j = 0; j < parts.length; j++)
+                            new_artists[j] = parts[j];
+                        _artists = new_artists;
+                        artist = new_display;
+                        _artist_key = _artists[0].collate_key_for_filename ();
+                        changed = true;
+                    }
+                }
             }
             if (tags.peek_string_index (Gst.Tags.TITLE, 0, out ti)
                     && ti != null && strcmp (title, ti) != 0) {
@@ -153,7 +186,7 @@ namespace G4 {
 
         public Music.deserialize (DataInputBytes dis) throws IOError {
             album = dis.read_string ();
-            artist = dis.read_string ();
+            var encoded_artist = dis.read_string ();
             title = dis.read_string ();
             has_cover = dis.read_byte () == 1;
             modified_time = (int64) dis.read_uint64 ();
@@ -165,14 +198,18 @@ namespace G4 {
             track = (int) dis.read_size ();
             disc = (int) dis.read_size ();
 
+            // Decode \x1F-joined artist names from cache; old entries have no \x1F
+            _artists = encoded_artist.length > 0 ? encoded_artist.split ("\x1F") : new string[0];
+            artist = string.joinv (", ", _artists);
             update_album_key ();
-            _artist_key = artist.collate_key_for_filename ();
+            _artist_key = _artists.length > 0 ? _artists[0].collate_key_for_filename ()
+                                               : artist.collate_key_for_filename ();
             _title_key = title.collate_key_for_filename ();
         }
 
         public void serialize (DataOutputBytes dos) throws IOError {
             dos.write_string (album);
-            dos.write_string (artist);
+            dos.write_string (string.joinv ("\x1F", _artists));
             dos.write_string (title);
             dos.write_byte (has_cover ? 1 : 0);
             dos.write_uint64 (modified_time);
@@ -220,6 +257,7 @@ namespace G4 {
                 }
                 if (artist.length == 0) {
                     artist = len >= 2 ? sa[len - 2].strip () : UNKNOWN_ARTIST;
+                    _artists = { artist };
                     _artist_key = artist.collate_key_for_filename ();
                 }
                 if (track_index == 0) {
@@ -233,6 +271,27 @@ namespace G4 {
                 //  assume folder name as the album
                 album = file.get_parent ()?.get_basename () ?? UNKNOWN_ALBUM;
                 _album_key = album.collate_key_for_filename ();
+            }
+        }
+
+        // Re-apply artist splitting for music loaded from cache,
+        // called after artist_split_chars is available.
+        public void apply_artist_split () {
+            if (artist_split_chars.length == 0)
+                return;
+            var seen = new HashTable<string, bool> (str_hash, str_equal);
+            var parts = new GenericArray<string> (_artists.length * 2 + 1);
+            foreach (unowned var ar in _artists)
+                split_and_collect (ar, artist_split_chars, seen, parts);
+            if (parts.length == 0)
+                split_and_collect (artist, artist_split_chars, seen, parts);
+            if (parts.length > 0 && parts.length != _artists.length) {
+                var new_artists = new string[parts.length];
+                for (var i = 0; i < parts.length; i++)
+                    new_artists[i] = parts[i];
+                _artists = new_artists;
+                artist = string.joinv (", ", _artists);
+                _artist_key = _artists[0].collate_key_for_filename ();
             }
         }
 
@@ -281,6 +340,25 @@ namespace G4 {
         public static int compare_by_recent (Music s1, Music s2) {
             var diff = s2.modified_time - s1.modified_time;
             return (int) diff.clamp (-1, 1);
+        }
+
+        // Split `s` by any character in `sep_chars` (literal chars, no regex),
+        // strip whitespace from each segment, deduplicate into `seen`/`parts`.
+        public static void split_and_collect (string s, string sep_chars, HashTable<string, bool> seen, GenericArray<string> parts) {
+            var len = s.length;
+            var start = 0;
+            for (var i = 0; i <= len; i++) {
+                if (i == len || (sep_chars.length > 0 && sep_chars.index_of_char ((unichar) s[i]) >= 0)) {
+                    if (i > start) {
+                        var segment = s.substring (start, i - start).strip ();
+                        if (segment.length > 0 && !seen.contains (segment)) {
+                            seen.set (segment, true);
+                            parts.add (segment);
+                        }
+                    }
+                    start = i + 1;
+                }
+            }
         }
 
         public static inline uint32 gst_date_time_to_uint (Gst.DateTime? dt) {

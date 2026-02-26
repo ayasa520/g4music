@@ -303,6 +303,7 @@ namespace G4 {
                 unowned var music = musics[i];
                 var cached_music = _tag_cache[music.uri];
                 if (cached_music != null && ((!)cached_music).modified_time == music.modified_time) {
+                    ((!)cached_music).apply_artist_split ();
                     musics[i] = (!)cached_music;
                 } else {
                     _tag_cache.add (music);

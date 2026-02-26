@@ -168,12 +168,12 @@ namespace G4 {
                     break;
 
                 case SortMode.ARTIST:
-                    _title.label = music.artist;
+                    _title.label = music.artist_display;
                     _subtitle.label = music.title;
                     break;
 
                 case SortMode.ARTIST_ALBUM:
-                    _title.label = @"$(music.artist): $(music.album)";
+                    _title.label = @"$(music.artist_display): $(music.album)";
                     _subtitle.label = (0 < music.track < int.MAX) ? @"$(music.track). $(music.title)" : music.title;
                     break;
 
@@ -185,7 +185,7 @@ namespace G4 {
 
                 default:
                     _title.label = music.title;
-                    _subtitle.label = music.artist;
+                    _subtitle.label = music.artist_display;
                     break;
             }
         }
@@ -307,7 +307,7 @@ namespace G4 {
         var section = new Menu ();
         section.append_item (create_menu_item_for_strv ({"title", music.title}, _("Search Title"), ACTION_WIN + ACTION_SEARCH));
         section.append_item (create_menu_item_for_strv ({"album", music.album}, _("Search Album"), ACTION_WIN + ACTION_SEARCH));
-        section.append_item (create_menu_item_for_strv ({"artist", music.artist}, _("Search Artist"), ACTION_WIN + ACTION_SEARCH));
+        section.append_item (create_menu_item_for_strv ({"artist", music.artist_display}, _("Search Artist"), ACTION_WIN + ACTION_SEARCH));
         unowned var uri = music.uri;
         var section2 = new Menu ();
         if (music.cover_uri != null)

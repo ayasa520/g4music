@@ -116,8 +116,8 @@ namespace G4 {
             return added;
         }
 
-        public Album? find_by_partial_artist (string artist) {
-            return _albums.find ((name, album) => artist.match_string (album.artist, true)) as Album;
+        public Album? find_by_partial_artist (string text) {
+            return _albums.find ((name, album) => text.match_string (album.artist_name, true)) as Album;
         }
 
         public new Album? @get (string name) {
@@ -303,15 +303,27 @@ namespace G4 {
             }
             var added = album.add_music (music);
 
-            unowned var artist_name = music.artist_name;
-            Artist artist;
-            lock (_artists) {
-                if (!_artists.lookup_extended (artist_name, out key, out artist)) {
-                    artist = new Artist (music, artist_name);
-                    _artists[artist_name] = artist;
-                }
+            var seen = new HashTable<string, bool> (str_hash, str_equal);
+            var artist_names = new GenericArray<string> (4);
+
+            unowned var album_artist = music.album_artist;
+            if (album_artist.length > 0) {
+                Music.split_and_collect (album_artist, artist_split_chars, seen, artist_names);
             }
-            added |= artist.add_music (music);
+            foreach (unowned var artist_name2 in music.artists) {
+                Music.split_and_collect (artist_name2, artist_split_chars, seen, artist_names);
+            }
+
+            foreach (unowned var artist_name in artist_names) {
+                Artist artist;
+                lock (_artists) {
+                    if (!_artists.lookup_extended (artist_name, out key, out artist)) {
+                        artist = new Artist (music, artist_name);
+                        _artists[artist.artist] = artist;
+                    }
+                }
+                added |= artist.add_music (music);
+            }
             return added;
         }
 
@@ -388,15 +400,25 @@ namespace G4 {
                 }
             }
 
-            unowned var artist_name = music.artist_name;
+            var seen = new HashTable<string, bool> (str_hash, str_equal);
+            var artist_names = new GenericArray<string> (4);
+
+            unowned var album_artist = music.album_artist;
+            if (album_artist.length > 0) {
+                Music.split_and_collect (album_artist, artist_split_chars, seen, artist_names);
+            }
+            foreach (unowned var artist_name2 in music.artists) {
+                Music.split_and_collect (artist_name2, artist_split_chars, seen, artist_names);
+            }
+
             lock (_artists) {
-                var artist = _artists[artist_name];
-                if (artist is Artist) {
-                    artist.remove_music (music);
-                    if (artist.length == 0)
-                        _artists.remove (artist_name);
-                } else {
-                    _artists.foreach_remove ((name, artist) => artist.remove_music (music) && artist.length == 0);
+                foreach (unowned var artist_name in artist_names) {
+                    var artist = _artists[artist_name];
+                    if (artist is Artist) {
+                        artist.remove_music (music);
+                        if (artist.length == 0)
+                            _artists.remove (artist_name);
+                    }
                 }
             }
         }
