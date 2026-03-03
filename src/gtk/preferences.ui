@@ -4,7 +4,7 @@
   <template class="G4PreferencesWindow" parent="AdwPreferencesWindow">
     <property name="default-width">480</property>
     <child>
-      <object class="AdwPreferencesPage">
+      <object class="AdwPreferencesPage" id="main_page">
         <child>
           <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">General</property>
@@ -178,6 +178,7 @@
                 <property name="title" translatable="yes">Prefer audio sink of GStreamer</property>
               </object>
             </child>
+
           </object>
         </child>
       </object>

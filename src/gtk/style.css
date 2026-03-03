@@ -26,3 +26,22 @@ tabbar revealer box {
     box-shadow: none;
     background-color: transparent;
 }
+
+/* Lyrics view */
+.lyrics-view {
+    background: transparent;
+}
+
+.lyrics-line {
+    padding: 6px 4px;
+    font-size: 108%;
+    opacity: 0.45;
+    transition: opacity 200ms ease;
+}
+
+.lyrics-current {
+    font-size: 120%;
+    font-weight: 600;
+    opacity: 1.0;
+    color: @accent_color;
+}

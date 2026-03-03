@@ -54,6 +54,7 @@ posix_dep = vala_compiler.find_library('posix', required: false)
 dependencies = [
   dependency('gstreamer-1.0'),
   dependency('gstreamer-tag-1.0'),
+  dependency('libsoup-3.0'),
   adw_dep,
   libm_dep,
   posix_dep,

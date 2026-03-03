@@ -7,6 +7,8 @@ namespace G4 {
         [GtkChild]
         private unowned Gtk.Button back_btn;
         [GtkChild]
+        private unowned Gtk.Stack cover_stack;
+        [GtkChild]
         private unowned Gtk.Label index_label;
         [GtkChild]
         private unowned Gtk.Box music_box;
@@ -22,6 +24,7 @@ namespace G4 {
         private unowned Gtk.Label initial_label;
 
         private PlayBar _play_bar = new PlayBar ();
+        private LyricsView _lyrics_view = new LyricsView ();
 
         private Application _app;
         private double _degrees_per_second = 360 / 20; // 20s per lap
@@ -32,6 +35,10 @@ namespace G4 {
         private bool _show_peak = true;
         private bool _size_allocated = false;
 
+        // Lyrics state
+        private int _current_duration_secs = 0;
+        private Cancellable? _lyrics_cancellable = null;
+
         public signal void cover_changed (Music? music, CrossFadePaintable cover);
 
         public PlayPanel (Application app, Window win, Leaflet leaflet) {
@@ -40,6 +47,10 @@ namespace G4 {
             _play_bar.halign = Gtk.Align.FILL;
             _play_bar.position_seeked.connect (on_position_seeked);
             music_box.append (_play_bar);
+
+            // Add lyrics view as the second page of the cover stack
+            _lyrics_view.vexpand = true;
+            cover_stack.add_named (_lyrics_view, "lyrics");
 
             leaflet.bind_property ("folded", back_btn, "visible", BindingFlags.SYNC_CREATE);
 
@@ -69,10 +80,22 @@ namespace G4 {
                 () => win.start_search (music_title.label, SearchMode.TITLE));
             make_right_clickable (music_box, show_popover_menu);
 
+            // Click cover → show lyrics; click lyrics view → show cover
+            make_widget_clickable (music_cover).released.connect (() => {
+                cover_stack.visible_child_name = "lyrics";
+            });
+            make_widget_clickable (_lyrics_view).released.connect (() => {
+                cover_stack.visible_child_name = "cover";
+            });
+
             app.index_changed.connect (on_index_changed);
             app.music_changed.connect (on_music_changed);
             app.music_cover_parsed.connect (on_music_cover_parsed);
             app.player.state_changed.connect (on_player_state_changed);
+            app.player.duration_changed.connect ((dur) => {
+                _current_duration_secs = (int) GstPlayer.to_second (dur);
+            });
+            app.player.position_updated.connect (on_position_updated);
 
             var settings = app.settings;
             settings.bind ("rotate-cover", this, "rotate-cover", SettingsBindFlags.DEFAULT);
@@ -183,6 +206,17 @@ namespace G4 {
             action_btn.sensitive = enabled;
             root.action_set_enabled (ACTION_APP + ACTION_PLAY_PAUSE, enabled);
             Window.get_default ()?.set_title (music?.get_artist_and_title () ?? _app.name);
+
+            // Load lyrics for the new track
+            _lyrics_cancellable?.cancel ();
+            _lyrics_cancellable = null;
+            if (music != null) {
+                _current_duration_secs = 0;
+                _lyrics_view.set_loading ();
+                load_lyrics.begin ((!)music);
+            } else {
+                _lyrics_view.set_no_lyrics ();
+            }
         }
 
         private bool on_music_folder_clicked (string uri) {
@@ -195,6 +229,13 @@ namespace G4 {
             var paintable = pixbuf != null ? Gdk.Texture.for_pixbuf ((!)pixbuf)
                             : _app.thumbnailer.create_music_text_paintable (music);
             update_cover_paintables (music, paintable);
+        }
+
+        private void on_position_updated (Gst.ClockTime position) {
+            if (cover_stack.visible_child_name == "lyrics") {
+                // Convert nanoseconds → milliseconds
+                _lyrics_view.update_position ((int64) (position / 1000000));
+            }
         }
 
         private Adw.Animation? _scale_animation = null;
@@ -264,6 +305,24 @@ namespace G4 {
             var dir_name = Uri.escape_string (get_display_name (uri));
             var link = @"<a href=\"change_dir\">$dir_name</a>";
             initial_label.set_markup (_("Drag and drop music files here,\nor change music location: ") + link);
+        }
+
+        private async void load_lyrics (Music music) {
+            var cancellable = new Cancellable ();
+            _lyrics_cancellable = cancellable;
+
+            var providers = LyricsProviderRegistry.get_enabled_ordered (_app.settings);
+            GenericArray<LyricLine>? lines = null;
+            for (var i = 0; i < providers.length; i++) {
+                lines = yield providers[i].fetch (music, _current_duration_secs, cancellable);
+                if (cancellable.is_cancelled ()) return;
+                if (lines != null) break;
+            }
+
+            if (lines != null)
+                _lyrics_view.set_lyrics ((!)lines);
+            else
+                _lyrics_view.set_no_lyrics ();
         }
     }
 }

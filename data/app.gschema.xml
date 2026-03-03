@@ -35,6 +35,10 @@
       <default>false</default>
       <summary>Load thumbnails for non-local files</summary>
     </key>
+    <key name="lyrics-providers" type="as">
+      <default>['local-lrc','lrclib']</default>
+      <summary>Ordered list of enabled lyrics provider IDs; highest priority first</summary>
+    </key>
     <key name="remain-progress" type="b">
       <default>false</default>
       <summary>Show remain progress</summary>
